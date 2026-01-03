@@ -17,15 +17,23 @@ let db: Firestore | null = null;
 
 export function initializeFirebase(): FirebaseApp {
   if (!app) {
+    console.log('[Firebase] Initializing with config:', {
+      projectId: firebaseConfig.projectId,
+      authDomain: firebaseConfig.authDomain,
+      hasApiKey: !!firebaseConfig.apiKey && firebaseConfig.apiKey !== 'your-api-key',
+    });
     app = initializeApp(firebaseConfig);
+    console.log('[Firebase] App initialized successfully');
   }
   return app;
 }
 
 export function getDb(): Firestore {
   if (!db) {
+    console.log('[Firebase] Getting Firestore instance...');
     const firebaseApp = initializeFirebase();
     db = getFirestore(firebaseApp);
+    console.log('[Firebase] Firestore instance created');
   }
   return db;
 }

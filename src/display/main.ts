@@ -40,21 +40,28 @@ let animationFrameId: number | null = null;
 
 // Initialize the display
 async function init() {
+  console.log('[Display] init() started');
+
   // Set up audio unlock
   unlockBtn.addEventListener('click', handleAudioUnlock);
   errorDismiss.addEventListener('click', hideError);
 
   // Check if we already have a room from URL
   roomId = getRoomFromCurrentUrl();
+  console.log('[Display] Room from URL:', roomId);
 
   if (roomId) {
     // Join existing room
+    console.log('[Display] Joining existing room:', roomId);
     await joinRoom(roomId);
   } else {
     // Create new room
     roomId = generateRoomId();
+    console.log('[Display] Creating new room:', roomId);
     await createNewRoom(roomId);
   }
+
+  console.log('[Display] Room setup complete, roomId:', roomId);
 
   // Update URL without reload
   const newUrl = `${window.location.pathname}?room=${roomId}`;
@@ -62,21 +69,30 @@ async function init() {
 
   // Generate QR code for controller
   const controlUrl = buildControlUrl(roomId);
+  console.log('[Display] Generating QR code for:', controlUrl);
   await generateQRCode(controlUrl, qrCanvas, { width: 150 });
   roomIdDisplay.textContent = roomId;
 
   // Start subscriptions
+  console.log('[Display] Starting subscriptions...');
   startSubscriptions();
 
   // Start render loop
+  console.log('[Display] Starting render loop');
   startRenderLoop();
+
+  console.log('[Display] init() completed');
 }
 
 async function createNewRoom(id: string) {
+  console.log('[Display] createNewRoom called with id:', id);
+  setConnectionStatus('connecting', 'Creating room...');
   try {
     await createRoom(id);
+    console.log('[Display] Room created successfully');
     setConnectionStatus('connected', 'Room created');
   } catch (error) {
+    console.error('[Display] Failed to create room:', error);
     showError(`Failed to create room: ${error}`);
     setConnectionStatus('disconnected', 'Failed to create room');
   }

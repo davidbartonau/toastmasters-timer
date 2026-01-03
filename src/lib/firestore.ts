@@ -17,8 +17,11 @@ import { Room, RoomState, Command, CommandWithId, INITIAL_ROOM_STATE } from './t
 
 // Create a new room
 export async function createRoom(roomId: string, title: string = 'Toastmasters Timer'): Promise<void> {
+  console.log('[Firestore] createRoom called with roomId:', roomId);
   const db = getDb();
+  console.log('[Firestore] Got db instance');
   const roomRef = doc(db, 'rooms', roomId);
+  console.log('[Firestore] Created room reference');
 
   const room: Room = {
     createdAt: Date.now(),
@@ -30,7 +33,14 @@ export async function createRoom(roomId: string, title: string = 'Toastmasters T
     },
   };
 
-  await setDoc(roomRef, room);
+  console.log('[Firestore] Attempting setDoc with room data:', JSON.stringify(room, null, 2));
+  try {
+    await setDoc(roomRef, room);
+    console.log('[Firestore] setDoc completed successfully');
+  } catch (error) {
+    console.error('[Firestore] setDoc FAILED:', error);
+    throw error;
+  }
 }
 
 // Get a room by ID
@@ -58,20 +68,24 @@ export function subscribeToRoom(
   onUpdate: (room: Room | null) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
+  console.log('[Firestore] subscribeToRoom called for roomId:', roomId);
   const db = getDb();
   const roomRef = doc(db, 'rooms', roomId);
 
   return onSnapshot(
     roomRef,
     (snapshot) => {
+      console.log('[Firestore] Room snapshot received, exists:', snapshot.exists());
       if (snapshot.exists()) {
+        console.log('[Firestore] Room data:', JSON.stringify(snapshot.data(), null, 2));
         onUpdate(snapshot.data() as Room);
       } else {
+        console.log('[Firestore] Room does not exist');
         onUpdate(null);
       }
     },
     (error) => {
-      console.error('Room subscription error:', error);
+      console.error('[Firestore] Room subscription error:', error);
       onError?.(error);
     }
   );
