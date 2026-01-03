@@ -10,8 +10,34 @@
   </head>
   <body>
     <div id="app" class="display-container color-neutral">
+      <!-- Club Setup View -->
+      <div id="club-setup" class="club-setup">
+        <div class="setup-content">
+          <h1>Toastmasters Timer</h1>
+          <p class="setup-intro">Enter your club ID or create a new one</p>
+
+          <div class="setup-form">
+            <input
+              type="text"
+              id="club-input"
+              placeholder="e.g., my-club-name"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+            />
+            <button id="join-club-btn" class="setup-btn primary">Join Club</button>
+            <div class="setup-divider">
+              <span>or</span>
+            </div>
+            <button id="create-club-btn" class="setup-btn secondary">Create New Club</button>
+          </div>
+
+          <p id="setup-error" class="setup-error hidden"></p>
+        </div>
+      </div>
+
       <!-- Audio unlock overlay -->
-      <div id="audio-unlock" class="audio-unlock">
+      <div id="audio-unlock" class="audio-unlock hidden">
         <div class="audio-unlock-content">
           <h2>Tap to Enable Audio</h2>
           <p>Audio is required for overtime alerts</p>
@@ -20,23 +46,23 @@
       </div>
 
       <!-- Main timer display -->
-      <div id="timer-display" class="timer-display">
+      <div id="timer-display" class="timer-display hidden">
         <div class="timer-time" id="timer-time">00:00</div>
         <div class="timer-status" id="timer-status">Ready</div>
         <div class="timer-overtime" id="timer-overtime"></div>
       </div>
 
-      <!-- QR code section (shown when room is created) -->
-      <div id="qr-section" class="qr-section">
+      <!-- QR code section (shown when club is active) -->
+      <div id="qr-section" class="qr-section hidden">
         <div class="qr-container">
           <canvas id="qr-canvas"></canvas>
-          <div class="room-id" id="room-id"></div>
+          <div class="club-id" id="club-id-display"></div>
           <div class="qr-instruction">Scan to control</div>
         </div>
       </div>
 
       <!-- Connection status -->
-      <div id="connection-status" class="connection-status">
+      <div id="connection-status" class="connection-status hidden">
         <span class="status-dot"></span>
         <span class="status-text">Connecting...</span>
       </div>

@@ -1,4 +1,4 @@
-import { ColorZone, RoomState } from './types.ts';
+import { ColorZone, ClubState, OvertimeMode, OVERTIME_BEEP_SCHEDULE } from './types.ts';
 
 // Format seconds as mm:ss
 export function formatTime(seconds: number): string {
@@ -35,19 +35,40 @@ export function getColorZone(
   return 'red';
 }
 
-// Check if we should trigger the beep
+// Check if we should trigger the beep based on overtime mode
 export function shouldBeep(
   elapsed: number,
   upperSec: number,
-  beeped: boolean
+  beeped: boolean,
+  beepCount: number,
+  overtimeMode: OvertimeMode
 ): boolean {
-  // Beep 30 seconds after upper threshold
-  const beepThreshold = upperSec + 30;
-  return elapsed >= beepThreshold && !beeped;
+  if (overtimeMode === 'none') {
+    return false;
+  }
+
+  const overtime = elapsed - upperSec;
+
+  if (overtime < 30) {
+    return false; // Always wait 30 seconds before first beep
+  }
+
+  if (overtimeMode === 'once') {
+    return !beeped;
+  }
+
+  // 'repeatedly' mode - check against schedule
+  // Schedule: 30s, 60s, 120s, 180s after upper threshold
+  if (beepCount >= OVERTIME_BEEP_SCHEDULE.length) {
+    return false; // Already beeped all scheduled times
+  }
+
+  const nextBeepAt = OVERTIME_BEEP_SCHEDULE[beepCount];
+  return overtime >= nextBeepAt;
 }
 
-// Get display color class based on room state
-export function getDisplayColorClass(state: RoomState): string {
+// Get display color class based on club state
+export function getDisplayColorClass(state: ClubState): string {
   const { status, startedAtMs, lowerSec, midSec, upperSec } = state;
 
   if (status === 'idle' || status === 'armed') {
@@ -71,7 +92,7 @@ export function getDisplayColorClass(state: RoomState): string {
 }
 
 // Get status text for display
-export function getStatusText(state: RoomState): string {
+export function getStatusText(state: ClubState): string {
   switch (state.status) {
     case 'idle':
       return 'Ready';

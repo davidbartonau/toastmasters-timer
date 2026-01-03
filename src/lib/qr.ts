@@ -24,27 +24,27 @@ export async function generateQRCode(
   }
 }
 
-// Extract room ID from URL
-export function extractRoomFromUrl(url: string): string | null {
+// Extract club ID from URL
+export function extractClubFromUrl(url: string): string | null {
   try {
     const urlObj = new URL(url);
-    return urlObj.searchParams.get('room');
+    return urlObj.searchParams.get('club');
   } catch {
     // Try to extract from relative URL
-    const match = url.match(/[?&]room=([A-Za-z0-9]+)/);
+    const match = url.match(/[?&]club=([A-Za-z0-9-]+)/i);
     return match ? match[1] : null;
   }
 }
 
-// Get room ID from current page URL
-export function getRoomFromCurrentUrl(): string | null {
-  return new URLSearchParams(window.location.search).get('room');
+// Get club ID from current page URL
+export function getClubFromCurrentUrl(): string | null {
+  return new URLSearchParams(window.location.search).get('club');
 }
 
-// Build control page URL for a room
-export function buildControlUrl(roomId: string): string {
+// Build control page URL for a club
+export function buildControlUrl(clubId: string): string {
   const baseUrl = window.location.origin;
-  return `${baseUrl}/control/?room=${roomId}`;
+  return `${baseUrl}/control/?club=${clubId}`;
 }
 
 // QR Scanner using BarcodeDetector or jsQR fallback

@@ -18,7 +18,8 @@ A real-time timer application for Toastmasters meetings with two views:
 │ - Shows timer   │         │ - Preset btns   │
 │ - Color zones   │         │ - Start/Stop    │
 │ - Beep logic    │         │ - QR scanner    │
-│ - Creates room  │         │ - Joins room    │
+│ - Creates club  │         │ - Joins club    │
+│ - Club setup    │         │ - Settings      │
 └────────┬────────┘         └────────┬────────┘
          │                           │
          │    Firestore Realtime     │
@@ -27,17 +28,17 @@ A real-time timer application for Toastmasters meetings with two views:
          ┌───────────▼───────────┐
          │      Firestore        │
          │                       │
-         │ rooms/{roomId}        │
+         │ clubs/{clubId}        │
          │   └─ commands/        │
          └───────────────────────┘
 ```
 
 ### Data Flow
 
-1. **Tablet creates room** → Generates roomId, writes to Firestore, shows QR
-2. **Phone scans QR** → Extracts roomId, subscribes to room
+1. **Tablet sets up club** → Prompts for club ID or generates new, writes to Firestore, shows QR
+2. **Phone scans QR** → Extracts clubId, subscribes to club
 3. **Phone sends command** → Writes to `commands` subcollection
-4. **Tablet processes command** → Updates room state, deletes command
+4. **Tablet processes command** → Updates club state/config, deletes command
 5. **Both devices sync** → Real-time listeners update UI
 
 ### State Machine
@@ -119,8 +120,8 @@ Valid transitions:
 ### Naming Conventions
 
 - **Files**: kebab-case (`firebase-config.ts`)
-- **Types/Interfaces**: PascalCase (`RoomState`, `Command`)
-- **Functions**: camelCase (`createRoom`, `sendCommand`)
+- **Types/Interfaces**: PascalCase (`ClubState`, `Command`)
+- **Functions**: camelCase (`createClub`, `sendCommand`)
 - **Constants**: SCREAMING_SNAKE_CASE (`DEFAULT_PRESETS`)
 - **CSS classes**: kebab-case (`timer-display`, `color-green`)
 
@@ -133,7 +134,7 @@ Valid transitions:
 
 ### State Management
 
-- Room state is the single source of truth in Firestore
+- Club state is the single source of truth in Firestore
 - Local state only for UI concerns (camera on/off, audio unlocked)
 - Tablet is authoritative for timing - writes `startedAtMs`
 
@@ -143,7 +144,7 @@ Commands are append-only with immediate deletion after processing:
 
 ```typescript
 interface Command {
-  type: 'SET_PRESET' | 'START' | 'STOP' | 'RESET';
+  type: 'SET_PRESET' | 'START' | 'STOP' | 'RESET' | 'UPDATE_CONFIG';
   payload: Record<string, unknown>;
   sentAtMs: number;
   clientId: string;
@@ -154,34 +155,40 @@ Tablet processes commands in `sentAtMs` order and deletes after processing.
 
 ## Firestore Schema
 
-### Room Document (`rooms/{roomId}`)
+### Club Document (`clubs/{clubId}`)
 
 ```typescript
-interface Room {
-  createdAt: number;          // Timestamp ms
-  title: string;              // Room title (optional display)
-  state: {
-    status: 'idle' | 'armed' | 'running' | 'stopped';
-    presetId: string | null;
-    lowerSec: number;         // Green threshold
-    midSec: number;           // Yellow threshold
-    upperSec: number;         // Red threshold
-    startedAtMs: number | null;
-    beeped: boolean;
-  };
-  controller: {
-    lastSeenAt: number | null;
-    clientId: string | null;
-  };
+interface Club {
+  config: ClubConfig;
+  state: ClubState;
+  updatedAt: number;
+}
+
+interface ClubConfig {
+  presets: Preset[];           // Available time presets
+  showTimer: boolean;          // Whether to show timer digits on display
+  overtimeMode: OvertimeMode;  // 'none' | 'once' | 'repeatedly'
+}
+
+interface ClubState {
+  status: 'idle' | 'armed' | 'running' | 'stopped';
+  presetId: string | null;
+  lowerSec: number;            // Green threshold
+  midSec: number;              // Yellow threshold
+  upperSec: number;            // Red threshold
+  startedAtMs: number | null;
+  beeped: boolean;
+  beepCount: number;           // For repeated beeps tracking
+  seq: number;                 // Sequence number for updates
 }
 ```
 
-### Command Document (`rooms/{roomId}/commands/{commandId}`)
+### Command Document (`clubs/{clubId}/commands/{commandId}`)
 
 ```typescript
 interface Command {
-  type: 'SET_PRESET' | 'START' | 'STOP' | 'RESET';
-  payload: SetPresetPayload | Record<string, never>;
+  type: 'SET_PRESET' | 'START' | 'STOP' | 'RESET' | 'UPDATE_CONFIG';
+  payload: SetPresetPayload | UpdateConfigPayload | Record<string, never>;
   sentAtMs: number;
   clientId: string;
 }
@@ -191,6 +198,12 @@ interface SetPresetPayload {
   lowerSec: number;
   midSec: number;
   upperSec: number;
+}
+
+interface UpdateConfigPayload {
+  showTimer?: boolean;
+  overtimeMode?: OvertimeMode;
+  presets?: Preset[];
 }
 ```
 
@@ -210,41 +223,70 @@ Given elapsed seconds `t`:
 
 ## Beep Logic
 
-- Trigger beep when `elapsed >= upperSec + 30` AND `!state.beeped`
-- Set `state.beeped = true` after playing
-- Requires user interaction to unlock audio (mobile browser restriction)
+Overtime alerts are controlled by `config.overtimeMode`:
+
+- **none**: No beep triggered
+- **once**: Trigger beep when `elapsed >= upperSec + 30` AND `!state.beeped`
+- **repeatedly**: Beep at 30s, 60s, 120s, 180s after upper threshold (controlled by `beepCount`)
+
+Requires user interaction to unlock audio (mobile browser restriction).
 
 ## Default Presets
 
 ```typescript
-const DEFAULT_PRESETS = [
+const DEFAULT_PRESETS: Preset[] = [
   { id: 'p_1_2', label: '1-2 min', lower: 60, mid: 90, upper: 120 },
   { id: 'p_2_3', label: '2-3 min', lower: 120, mid: 150, upper: 180 },
-  { id: 'p_4_5', label: '4-5 min', lower: 240, mid: 270, upper: 300 },
-  { id: 'p_5_6', label: '5-6 min', lower: 300, mid: 330, upper: 360 },
+  { id: 'p_3_5', label: '3-5 min', lower: 180, mid: 240, upper: 300 },
+  { id: 'p_4_6', label: '4-6 min', lower: 240, mid: 300, upper: 360 },
   { id: 'p_5_7', label: '5-7 min', lower: 300, mid: 360, upper: 420 },
-  { id: 'p_7_9', label: '7-9 min', lower: 420, mid: 480, upper: 540 },
 ];
 ```
+
+## Club Setup Flow
+
+### Display (Tablet)
+1. On load, check URL for `?club=` parameter
+2. If not found, check localStorage for saved club ID
+3. Show club setup view: enter existing ID or create new
+4. Once club is set, save to localStorage and show timer + QR code
+
+### Control (Phone)
+1. Scan QR code which contains `/control/?club={clubId}`
+2. Or manually enter club ID
+3. Connect to club and show controller with settings
+
+## Settings (Phone Controller)
+
+- **Show Timer**: Toggle timer digits visibility on display (default: true)
+- **Play Overtime Alert**:
+  - No: No audio alerts
+  - Once: Single beep 30s after overtime (default)
+  - Repeatedly: Beeps at 30s, 1m, 2m, 3m after overtime
+
+Settings are saved to club config and synced to display in real-time.
 
 ## Security Model
 
 - No authentication required (trusted club environment)
-- Random roomId acts as shared secret
+- Club ID acts as shared secret (user-chosen or random)
 - Open Firestore rules for MVP (can add rate limiting later)
+- Club IDs persist in localStorage for convenience
 
 ## Testing
 
 ### Manual Testing Checklist
 
-1. Create room on tablet, verify QR displays
-2. Scan QR on phone, verify connection
-3. Select preset, verify tablet shows "armed"
-4. Start timer, verify countdown and color changes
-5. Stop timer, verify it pauses
-6. Reset, verify return to idle
-7. Reload tablet mid-timer, verify recovery
-8. Test beep at overtime threshold
+1. Open display on tablet, enter club name or generate new
+2. Verify QR displays with club ID
+3. Scan QR on phone, verify connection
+4. Toggle settings (show timer, overtime mode)
+5. Select preset, verify tablet shows "armed"
+6. Start timer, verify countdown and color changes
+7. Stop timer, verify it pauses
+8. Reset, verify return to idle
+9. Reload tablet mid-timer, verify recovery
+10. Test beep at overtime threshold with each mode
 
 ### Browser Testing
 

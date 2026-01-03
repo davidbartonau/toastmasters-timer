@@ -1,12 +1,14 @@
 import { generateRoomId } from '../lib/firebase.ts';
 import {
-  createRoom,
-  subscribeToRoom,
+  createClub,
+  getClub,
+  subscribeToClub,
   subscribeToCommands,
-  updateRoomState,
+  updateClubState,
+  updateClubConfig,
   deleteCommand,
 } from '../lib/firestore.ts';
-import { generateQRCode, getRoomFromCurrentUrl, buildControlUrl } from '../lib/qr.ts';
+import { generateQRCode, getClubFromCurrentUrl, buildControlUrl } from '../lib/qr.ts';
 import {
   formatTime,
   getElapsedSeconds,
@@ -16,25 +18,34 @@ import {
   isOvertime,
 } from '../lib/timer.ts';
 import { unlockAudio, playOvertimeBeep, isAudioUnlocked } from '../lib/audio.ts';
-import { Room, RoomState, CommandWithId, SetPresetPayload } from '../lib/types.ts';
+import { Club, CommandWithId, SetPresetPayload, UpdateConfigPayload } from '../lib/types.ts';
 
-// DOM Elements
+// DOM Elements - Club Setup
+const clubSetup = document.getElementById('club-setup')!;
+const clubInput = document.getElementById('club-input') as HTMLInputElement;
+const joinClubBtn = document.getElementById('join-club-btn')!;
+const createClubBtn = document.getElementById('create-club-btn')!;
+const setupError = document.getElementById('setup-error')!;
+
+// DOM Elements - Timer Display
 const app = document.getElementById('app')!;
 const audioUnlockOverlay = document.getElementById('audio-unlock')!;
 const unlockBtn = document.getElementById('unlock-btn')!;
+const timerDisplay = document.getElementById('timer-display')!;
 const timerTime = document.getElementById('timer-time')!;
 const timerStatus = document.getElementById('timer-status')!;
 const timerOvertime = document.getElementById('timer-overtime')!;
+const qrSection = document.getElementById('qr-section')!;
 const qrCanvas = document.getElementById('qr-canvas') as HTMLCanvasElement;
-const roomIdDisplay = document.getElementById('room-id')!;
+const clubIdDisplay = document.getElementById('club-id-display')!;
 const connectionStatus = document.getElementById('connection-status')!;
 const errorDisplay = document.getElementById('error-display')!;
 const errorMessage = document.getElementById('error-message')!;
 const errorDismiss = document.getElementById('error-dismiss')!;
 
 // State
-let roomId: string | null = null;
-let currentRoom: Room | null = null;
+let clubId: string | null = null;
+let currentClub: Club | null = null;
 let processedCommandIds = new Set<string>();
 let animationFrameId: number | null = null;
 
@@ -42,80 +53,170 @@ let animationFrameId: number | null = null;
 async function init() {
   console.log('[Display] init() started');
 
-  // Set up audio unlock
+  // Set up event listeners
   unlockBtn.addEventListener('click', handleAudioUnlock);
   errorDismiss.addEventListener('click', hideError);
+  joinClubBtn.addEventListener('click', handleJoinClub);
+  createClubBtn.addEventListener('click', handleCreateClub);
+  clubInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleJoinClub();
+  });
 
-  // Check if we already have a room from URL
-  roomId = getRoomFromCurrentUrl();
-  console.log('[Display] Room from URL:', roomId);
+  // Check if club is in URL
+  clubId = getClubFromCurrentUrl();
+  console.log('[Display] Club from URL:', clubId);
 
-  if (roomId) {
-    // Join existing room
-    console.log('[Display] Joining existing room:', roomId);
-    await joinRoom(roomId);
+  if (clubId) {
+    // Try to load existing club
+    await loadClub(clubId);
   } else {
-    // Create new room
-    roomId = generateRoomId();
-    console.log('[Display] Creating new room:', roomId);
-    await createNewRoom(roomId);
+    // Check localStorage for saved club
+    const savedClubId = localStorage.getItem('toastmasters-club-id');
+    if (savedClubId) {
+      clubInput.value = savedClubId;
+    }
+    // Show setup view
+    showSetupView();
   }
-
-  console.log('[Display] Room setup complete, roomId:', roomId);
-
-  // Update URL without reload
-  const newUrl = `${window.location.pathname}?room=${roomId}`;
-  window.history.replaceState({}, '', newUrl);
-
-  // Generate QR code for controller
-  const controlUrl = buildControlUrl(roomId);
-  console.log('[Display] Generating QR code for:', controlUrl);
-  await generateQRCode(controlUrl, qrCanvas, { width: 150 });
-  roomIdDisplay.textContent = roomId;
-
-  // Start subscriptions
-  console.log('[Display] Starting subscriptions...');
-  startSubscriptions();
-
-  // Start render loop
-  console.log('[Display] Starting render loop');
-  startRenderLoop();
 
   console.log('[Display] init() completed');
 }
 
-async function createNewRoom(id: string) {
-  console.log('[Display] createNewRoom called with id:', id);
-  setConnectionStatus('connecting', 'Creating room...');
+function showSetupView() {
+  clubSetup.classList.remove('hidden');
+  timerDisplay.classList.add('hidden');
+  qrSection.classList.add('hidden');
+  connectionStatus.classList.add('hidden');
+  audioUnlockOverlay.classList.add('hidden');
+}
+
+function showTimerView() {
+  clubSetup.classList.add('hidden');
+  timerDisplay.classList.remove('hidden');
+  qrSection.classList.remove('hidden');
+  connectionStatus.classList.remove('hidden');
+  audioUnlockOverlay.classList.remove('hidden');
+}
+
+function showSetupError(message: string) {
+  setupError.textContent = message;
+  setupError.classList.remove('hidden');
+}
+
+function hideSetupError() {
+  setupError.classList.add('hidden');
+}
+
+// Generate a URL-friendly club ID
+function generateClubId(): string {
+  // Generate a random 6-character alphanumeric ID
+  return generateRoomId().toLowerCase();
+}
+
+// Normalize club ID for consistency
+function normalizeClubId(id: string): string {
+  // Remove leading/trailing whitespace, convert to lowercase, replace spaces with dashes
+  return id.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+async function handleJoinClub() {
+  hideSetupError();
+
+  const inputId = normalizeClubId(clubInput.value);
+  if (!inputId || inputId.length < 2) {
+    showSetupError('Please enter a valid club ID');
+    return;
+  }
+
+  await loadClub(inputId);
+}
+
+async function handleCreateClub() {
+  hideSetupError();
+
+  let newClubId: string;
+
+  // Use the input value if provided, otherwise generate one
+  const inputId = normalizeClubId(clubInput.value);
+  if (inputId && inputId.length >= 2) {
+    newClubId = inputId;
+  } else {
+    newClubId = generateClubId();
+  }
+
+  // Check if club already exists
+  const existingClub = await getClub(newClubId);
+  if (existingClub) {
+    showSetupError(`Club "${newClubId}" already exists. Use "Join Club" instead.`);
+    clubInput.value = newClubId;
+    return;
+  }
+
+  // Create new club
   try {
-    await createRoom(id);
-    console.log('[Display] Room created successfully');
-    setConnectionStatus('connected', 'Room created');
+    await createClub(newClubId);
+    console.log('[Display] Created new club:', newClubId);
+    await loadClub(newClubId);
   } catch (error) {
-    console.error('[Display] Failed to create room:', error);
-    showError(`Failed to create room: ${error}`);
-    setConnectionStatus('disconnected', 'Failed to create room');
+    console.error('[Display] Failed to create club:', error);
+    showSetupError(`Failed to create club: ${error}`);
   }
 }
 
-async function joinRoom(_id: string) {
-  setConnectionStatus('connecting', 'Joining room...');
-  // Room already exists, we'll subscribe to it via startSubscriptions
+async function loadClub(id: string) {
+  clubId = id;
+  hideSetupError();
+
+  console.log('[Display] Loading club:', id);
+  setConnectionStatus('connecting', 'Connecting...');
+
+  // Check if club exists
+  const club = await getClub(id);
+  if (!club) {
+    showSetupError(`Club "${id}" not found. Create it first.`);
+    clubId = null;
+    showSetupView();
+    return;
+  }
+
+  // Save to localStorage
+  localStorage.setItem('toastmasters-club-id', id);
+
+  // Update URL
+  const newUrl = `${window.location.pathname}?club=${id}`;
+  window.history.replaceState({}, '', newUrl);
+
+  // Show timer view
+  showTimerView();
+
+  // Generate QR code
+  const controlUrl = buildControlUrl(id);
+  console.log('[Display] Generating QR code for:', controlUrl);
+  await generateQRCode(controlUrl, qrCanvas, { width: 150 });
+  clubIdDisplay.textContent = id;
+
+  // Start subscriptions
+  startSubscriptions();
+
+  // Start render loop
+  startRenderLoop();
+
+  setConnectionStatus('connected', 'Connected');
 }
 
 function startSubscriptions() {
-  if (!roomId) return;
+  if (!clubId) return;
 
-  // Subscribe to room state
-  subscribeToRoom(
-    roomId,
-    (room) => {
-      if (room) {
-        currentRoom = room;
+  // Subscribe to club state
+  subscribeToClub(
+    clubId,
+    (club) => {
+      if (club) {
+        currentClub = club;
         setConnectionStatus('connected', 'Connected');
       } else {
-        showError('Room not found');
-        setConnectionStatus('disconnected', 'Room not found');
+        showError('Club not found');
+        setConnectionStatus('disconnected', 'Club not found');
       }
     },
     (error) => {
@@ -126,7 +227,7 @@ function startSubscriptions() {
 
   // Subscribe to commands
   subscribeToCommands(
-    roomId,
+    clubId,
     async (commands) => {
       for (const command of commands) {
         if (!processedCommandIds.has(command.id)) {
@@ -142,7 +243,7 @@ function startSubscriptions() {
 }
 
 async function processCommand(command: CommandWithId) {
-  if (!roomId || !currentRoom) return;
+  if (!clubId || !currentClub) return;
 
   console.log('Processing command:', command.type, command.payload);
 
@@ -150,7 +251,7 @@ async function processCommand(command: CommandWithId) {
     switch (command.type) {
       case 'SET_PRESET': {
         const payload = command.payload as SetPresetPayload;
-        await updateRoomState(roomId, {
+        await updateClubState(clubId, {
           status: 'armed',
           presetId: payload.presetId,
           lowerSec: payload.lowerSec,
@@ -158,24 +259,26 @@ async function processCommand(command: CommandWithId) {
           upperSec: payload.upperSec,
           startedAtMs: null,
           beeped: false,
+          beepCount: 0,
         });
         break;
       }
 
       case 'START': {
-        if (currentRoom.state.status === 'armed' || currentRoom.state.status === 'stopped') {
-          await updateRoomState(roomId, {
+        if (currentClub.state.status === 'armed' || currentClub.state.status === 'stopped') {
+          await updateClubState(clubId, {
             status: 'running',
             startedAtMs: Date.now(),
             beeped: false,
+            beepCount: 0,
           });
         }
         break;
       }
 
       case 'STOP': {
-        if (currentRoom.state.status === 'running') {
-          await updateRoomState(roomId, {
+        if (currentClub.state.status === 'running') {
+          await updateClubState(clubId, {
             status: 'stopped',
           });
         }
@@ -183,7 +286,7 @@ async function processCommand(command: CommandWithId) {
       }
 
       case 'RESET': {
-        await updateRoomState(roomId, {
+        await updateClubState(clubId, {
           status: 'idle',
           presetId: null,
           lowerSec: 0,
@@ -191,13 +294,20 @@ async function processCommand(command: CommandWithId) {
           upperSec: 0,
           startedAtMs: null,
           beeped: false,
+          beepCount: 0,
         });
+        break;
+      }
+
+      case 'UPDATE_CONFIG': {
+        const payload = command.payload as UpdateConfigPayload;
+        await updateClubConfig(clubId, payload);
         break;
       }
     }
 
     // Delete processed command
-    await deleteCommand(roomId, command.id);
+    await deleteCommand(clubId, command.id);
   } catch (error) {
     console.error('Failed to process command:', error);
   }
@@ -205,25 +315,33 @@ async function processCommand(command: CommandWithId) {
 
 function startRenderLoop() {
   function render() {
-    if (currentRoom) {
-      updateDisplay(currentRoom.state);
+    if (currentClub) {
+      updateDisplay(currentClub);
     }
     animationFrameId = requestAnimationFrame(render);
   }
   render();
 }
 
-function updateDisplay(state: RoomState) {
+function updateDisplay(club: Club) {
+  const { state, config } = club;
+
   // Update background color
   const colorClass = getDisplayColorClass(state);
   app.className = `display-container ${colorClass}`;
 
-  // Update timer
+  // Update timer (only if showTimer is enabled in config)
   let elapsed = 0;
   if (state.status === 'running' || state.status === 'stopped') {
     elapsed = getElapsedSeconds(state.startedAtMs);
   }
-  timerTime.textContent = formatTime(elapsed);
+
+  if (config.showTimer) {
+    timerTime.textContent = formatTime(elapsed);
+    timerTime.classList.remove('hidden');
+  } else {
+    timerTime.classList.add('hidden');
+  }
 
   // Update status
   timerStatus.textContent = getStatusText(state);
@@ -240,7 +358,7 @@ function updateDisplay(state: RoomState) {
   // Check for beep
   if (
     state.status === 'running' &&
-    shouldBeep(elapsed, state.upperSec, state.beeped) &&
+    shouldBeep(elapsed, state.upperSec, state.beeped, state.beepCount, config.overtimeMode) &&
     isAudioUnlocked()
   ) {
     triggerBeep();
@@ -248,14 +366,18 @@ function updateDisplay(state: RoomState) {
 }
 
 async function triggerBeep() {
-  if (!roomId) return;
+  if (!clubId || !currentClub) return;
 
   // Play beep sound
   playOvertimeBeep();
 
-  // Update beeped flag in Firestore
+  // Update beep state in Firestore
   try {
-    await updateRoomState(roomId, { beeped: true });
+    const newBeepCount = currentClub.state.beepCount + 1;
+    await updateClubState(clubId, {
+      beeped: true,
+      beepCount: newBeepCount,
+    });
   } catch (error) {
     console.error('Failed to update beeped state:', error);
   }

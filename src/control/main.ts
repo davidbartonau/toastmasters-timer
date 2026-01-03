@@ -1,24 +1,31 @@
 import { generateClientId } from '../lib/firebase.ts';
 import {
-  roomExists,
-  subscribeToRoom,
+  clubExists,
+  subscribeToClub,
   sendCommand,
-  updateControllerInfo,
 } from '../lib/firestore.ts';
-import { QRScanner, extractRoomFromUrl, getRoomFromCurrentUrl } from '../lib/qr.ts';
+import { QRScanner, extractClubFromUrl, getClubFromCurrentUrl } from '../lib/qr.ts';
 import { formatTime, getElapsedSeconds } from '../lib/timer.ts';
-import { Room, RoomState, DEFAULT_PRESETS, SetPresetPayload } from '../lib/types.ts';
+import {
+  Club,
+  ClubState,
+  ClubConfig,
+  Preset,
+  SetPresetPayload,
+  UpdateConfigPayload,
+  OvertimeMode,
+} from '../lib/types.ts';
 
 // DOM Elements - Scanner view
 const scannerView = document.getElementById('scanner-view')!;
 const scannerVideo = document.getElementById('scanner-video') as HTMLVideoElement;
-const roomInput = document.getElementById('room-input') as HTMLInputElement;
+const clubInput = document.getElementById('club-input') as HTMLInputElement;
 const joinBtn = document.getElementById('join-btn')!;
 const scannerError = document.getElementById('scanner-error')!;
 
 // DOM Elements - Controller view
 const controllerView = document.getElementById('controller-view')!;
-const roomCodeDisplay = document.getElementById('room-code')!;
+const clubCodeDisplay = document.getElementById('club-code')!;
 const statusIndicator = document.getElementById('status-indicator')!;
 const statusText = document.getElementById('status-text')!;
 const currentTimeDisplay = document.getElementById('current-time')!;
@@ -29,41 +36,54 @@ const resetBtn = document.getElementById('reset-btn') as HTMLButtonElement;
 const connectionIndicator = document.getElementById('connection-indicator')!;
 const connectionText = document.getElementById('connection-text')!;
 
+// DOM Elements - Settings
+const settingsToggle = document.getElementById('settings-toggle')!;
+const settingsPanel = document.getElementById('settings-panel')!;
+const showTimerToggle = document.getElementById('show-timer-toggle') as HTMLInputElement;
+const overtimeModeRadios = document.querySelectorAll('input[name="overtime-mode"]') as NodeListOf<HTMLInputElement>;
+
 // DOM Elements - Error overlay
 const errorOverlay = document.getElementById('error-overlay')!;
 const errorMessage = document.getElementById('error-message')!;
 const errorClose = document.getElementById('error-close')!;
 
 // State
-let roomId: string | null = null;
+let clubId: string | null = null;
 let clientId: string = generateClientId();
-let currentRoom: Room | null = null;
+let currentClub: Club | null = null;
 let selectedPresetId: string | null = null;
 let qrScanner: QRScanner | null = null;
 let updateInterval: number | null = null;
+let settingsOpen = false;
 
 // Initialize
 async function init() {
   // Set up event listeners
   joinBtn.addEventListener('click', handleManualJoin);
-  roomInput.addEventListener('keypress', (e) => {
+  clubInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleManualJoin();
   });
   errorClose.addEventListener('click', hideError);
 
-  // Generate preset buttons
-  generatePresetButtons();
+  // Settings toggle
+  settingsToggle.addEventListener('click', toggleSettings);
+
+  // Settings change handlers
+  showTimerToggle.addEventListener('change', handleShowTimerChange);
+  overtimeModeRadios.forEach(radio => {
+    radio.addEventListener('change', handleOvertimeModeChange);
+  });
 
   // Set up control button listeners
   startBtn.addEventListener('click', handleStart);
   stopBtn.addEventListener('click', handleStop);
   resetBtn.addEventListener('click', handleReset);
 
-  // Check if room is in URL
-  roomId = getRoomFromCurrentUrl();
+  // Check if club is in URL
+  clubId = getClubFromCurrentUrl();
 
-  if (roomId) {
-    await connectToRoom(roomId);
+  if (clubId) {
+    await connectToClub(clubId);
   } else {
     showScannerView();
   }
@@ -80,21 +100,32 @@ function showControllerView() {
   controllerView.classList.remove('hidden');
   stopQRScanner();
 
-  if (roomId) {
-    roomCodeDisplay.textContent = roomId;
+  if (clubId) {
+    clubCodeDisplay.textContent = clubId;
   }
 
   // Start update interval for timer display
   startUpdateInterval();
 }
 
+function toggleSettings() {
+  settingsOpen = !settingsOpen;
+  if (settingsOpen) {
+    settingsPanel.classList.remove('hidden');
+    settingsToggle.classList.add('active');
+  } else {
+    settingsPanel.classList.add('hidden');
+    settingsToggle.classList.remove('active');
+  }
+}
+
 function startQRScanner() {
   qrScanner = new QRScanner(
     scannerVideo,
     async (result) => {
-      const scannedRoomId = extractRoomFromUrl(result);
-      if (scannedRoomId) {
-        await connectToRoom(scannedRoomId);
+      const scannedClubId = extractClubFromUrl(result);
+      if (scannedClubId) {
+        await connectToClub(scannedClubId);
       } else {
         showScannerError('Invalid QR code');
         // Restart scanner
@@ -103,7 +134,7 @@ function startQRScanner() {
     },
     (error) => {
       console.error('Scanner error:', error);
-      showScannerError('Camera access denied. Please enter room code manually.');
+      showScannerError('Camera access denied. Please enter club ID manually.');
     }
   );
 
@@ -118,65 +149,63 @@ function stopQRScanner() {
 }
 
 async function handleManualJoin() {
-  const inputRoomId = roomInput.value.trim().toUpperCase();
-  if (inputRoomId.length < 4) {
-    showScannerError('Please enter a valid room code');
+  const inputClubId = clubInput.value.trim().toLowerCase();
+  if (inputClubId.length < 2) {
+    showScannerError('Please enter a valid club ID');
     return;
   }
 
-  await connectToRoom(inputRoomId);
+  await connectToClub(inputClubId);
 }
 
-async function connectToRoom(id: string) {
-  roomId = id;
+async function connectToClub(id: string) {
+  clubId = id;
   hideScannerError();
 
-  // Check if room exists
-  const exists = await roomExists(id);
+  // Check if club exists
+  const exists = await clubExists(id);
   if (!exists) {
-    showScannerError(`Room "${id}" not found`);
-    roomId = null;
+    showScannerError(`Club "${id}" not found`);
+    clubId = null;
     return;
   }
 
   // Update URL
-  const newUrl = `${window.location.pathname}?room=${id}`;
+  const newUrl = `${window.location.pathname}?club=${id}`;
   window.history.replaceState({}, '', newUrl);
 
   // Show controller view
   showControllerView();
 
-  // Subscribe to room
-  subscribeToRoom(
+  // Subscribe to club
+  subscribeToClub(
     id,
-    (room) => {
-      if (room) {
-        currentRoom = room;
-        updateUI(room.state);
+    (club) => {
+      if (club) {
+        const isFirstLoad = currentClub === null;
+        currentClub = club;
+        updateUI(club.state);
+        updateSettingsUI(club.config);
+        if (isFirstLoad) {
+          generatePresetButtons(club.config.presets);
+        }
         setConnected(true);
       } else {
-        showError('Room was deleted');
+        showError('Club was deleted');
         setConnected(false);
       }
     },
     (error) => {
-      console.error('Room subscription error:', error);
+      console.error('Club subscription error:', error);
       setConnected(false);
     }
   );
-
-  // Update controller presence
-  try {
-    await updateControllerInfo(id, clientId);
-  } catch (error) {
-    console.error('Failed to update controller info:', error);
-  }
 }
 
-function generatePresetButtons() {
+function generatePresetButtons(presets: Preset[]) {
   presetsGrid.innerHTML = '';
 
-  for (const preset of DEFAULT_PRESETS) {
+  for (const preset of presets) {
     const button = document.createElement('button');
     button.className = 'preset-btn';
     button.textContent = preset.label;
@@ -186,8 +215,59 @@ function generatePresetButtons() {
   }
 }
 
-async function handlePresetSelect(preset: (typeof DEFAULT_PRESETS)[number]) {
-  if (!roomId) return;
+function updateSettingsUI(config: ClubConfig) {
+  // Update show timer toggle
+  showTimerToggle.checked = config.showTimer;
+
+  // Update overtime mode radio
+  overtimeModeRadios.forEach(radio => {
+    radio.checked = radio.value === config.overtimeMode;
+  });
+}
+
+async function handleShowTimerChange() {
+  if (!clubId) return;
+
+  const payload: UpdateConfigPayload = {
+    showTimer: showTimerToggle.checked,
+  };
+
+  try {
+    await sendCommand(clubId, {
+      type: 'UPDATE_CONFIG',
+      payload,
+      clientId,
+    });
+  } catch (error) {
+    console.error('Failed to update showTimer:', error);
+    showError('Failed to update settings');
+  }
+}
+
+async function handleOvertimeModeChange() {
+  if (!clubId) return;
+
+  const selectedRadio = document.querySelector('input[name="overtime-mode"]:checked') as HTMLInputElement;
+  if (!selectedRadio) return;
+
+  const payload: UpdateConfigPayload = {
+    overtimeMode: selectedRadio.value as OvertimeMode,
+  };
+
+  try {
+    await sendCommand(clubId, {
+      type: 'UPDATE_CONFIG',
+      payload,
+      clientId,
+    });
+  } catch (error) {
+    console.error('Failed to update overtimeMode:', error);
+    showError('Failed to update settings');
+  }
+}
+
+async function handlePresetSelect(preset: Preset) {
+  if (!clubId) return;
 
   selectedPresetId = preset.id;
 
@@ -203,7 +283,7 @@ async function handlePresetSelect(preset: (typeof DEFAULT_PRESETS)[number]) {
   };
 
   try {
-    await sendCommand(roomId, {
+    await sendCommand(clubId, {
       type: 'SET_PRESET',
       payload,
       clientId,
@@ -227,10 +307,10 @@ function updatePresetSelection() {
 }
 
 async function handleStart() {
-  if (!roomId) return;
+  if (!clubId) return;
 
   try {
-    await sendCommand(roomId, {
+    await sendCommand(clubId, {
       type: 'START',
       payload: {},
       clientId,
@@ -242,10 +322,10 @@ async function handleStart() {
 }
 
 async function handleStop() {
-  if (!roomId) return;
+  if (!clubId) return;
 
   try {
-    await sendCommand(roomId, {
+    await sendCommand(clubId, {
       type: 'STOP',
       payload: {},
       clientId,
@@ -257,13 +337,13 @@ async function handleStop() {
 }
 
 async function handleReset() {
-  if (!roomId) return;
+  if (!clubId) return;
 
   selectedPresetId = null;
   updatePresetSelection();
 
   try {
-    await sendCommand(roomId, {
+    await sendCommand(clubId, {
       type: 'RESET',
       payload: {},
       clientId,
@@ -274,7 +354,7 @@ async function handleReset() {
   }
 }
 
-function updateUI(state: RoomState) {
+function updateUI(state: ClubState) {
   // Update status indicator
   statusIndicator.className = `status-indicator ${state.status}`;
 
@@ -294,7 +374,7 @@ function updateUI(state: RoomState) {
       break;
   }
 
-  // Update selected preset from room state
+  // Update selected preset from club state
   if (state.presetId && state.presetId !== selectedPresetId) {
     selectedPresetId = state.presetId;
     updatePresetSelection();
@@ -304,7 +384,7 @@ function updateUI(state: RoomState) {
   updateButtonStates(state);
 }
 
-function updateButtonStates(state: RoomState) {
+function updateButtonStates(state: ClubState) {
   switch (state.status) {
     case 'idle':
       startBtn.disabled = true;
@@ -338,11 +418,11 @@ function updateButtonStates(state: RoomState) {
 function startUpdateInterval() {
   // Update timer display every 250ms
   updateInterval = window.setInterval(() => {
-    if (currentRoom && currentRoom.state.status === 'running') {
-      const elapsed = getElapsedSeconds(currentRoom.state.startedAtMs);
+    if (currentClub && currentClub.state.status === 'running') {
+      const elapsed = getElapsedSeconds(currentClub.state.startedAtMs);
       currentTimeDisplay.textContent = formatTime(elapsed);
-    } else if (currentRoom && currentRoom.state.status === 'stopped') {
-      const elapsed = getElapsedSeconds(currentRoom.state.startedAtMs);
+    } else if (currentClub && currentClub.state.status === 'stopped') {
+      const elapsed = getElapsedSeconds(currentClub.state.startedAtMs);
       currentTimeDisplay.textContent = formatTime(elapsed);
     } else {
       currentTimeDisplay.textContent = '--:--';

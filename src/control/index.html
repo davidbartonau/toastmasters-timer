@@ -23,15 +23,14 @@
           </div>
         </div>
         <div class="scanner-footer">
-          <p>Or enter room code:</p>
+          <p>Or enter club ID:</p>
           <div class="manual-entry">
             <input
               type="text"
-              id="room-input"
-              placeholder="ABC123"
-              maxlength="6"
+              id="club-input"
+              placeholder="my-club-name"
               autocomplete="off"
-              autocapitalize="characters"
+              autocapitalize="none"
             />
             <button id="join-btn">Join</button>
           </div>
@@ -43,10 +42,48 @@
       <div id="controller-view" class="controller-view hidden">
         <header class="controller-header">
           <h1>Timer Control</h1>
-          <div class="room-info">
-            Room: <span id="room-code"></span>
+          <div class="club-info">
+            Club: <span id="club-code"></span>
+            <button id="settings-toggle" class="settings-toggle-btn" title="Settings">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+            </button>
           </div>
         </header>
+
+        <!-- Settings Panel (hidden by default) -->
+        <div id="settings-panel" class="settings-panel hidden">
+          <h2>Settings</h2>
+
+          <div class="setting-group">
+            <label class="setting-label">
+              <span>Show Timer on Display</span>
+              <input type="checkbox" id="show-timer-toggle" checked />
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label-text">Play Overtime Alert</label>
+            <div class="radio-group">
+              <label class="radio-option">
+                <input type="radio" name="overtime-mode" value="none" />
+                <span>No</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="overtime-mode" value="once" checked />
+                <span>Once</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="overtime-mode" value="repeatedly" />
+                <span>Repeatedly</span>
+              </label>
+            </div>
+            <p class="setting-hint">Repeatedly: 30s, 1m, 2m, 3m after overtime</p>
+          </div>
+        </div>
 
         <!-- Status display -->
         <div class="status-bar">

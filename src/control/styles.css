@@ -96,21 +96,19 @@ html, body {
   justify-content: center;
 }
 
-#room-input {
-  width: 120px;
+#club-input {
+  width: 160px;
   padding: 0.75rem 1rem;
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 600;
   text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
   border: 2px solid #444;
   border-radius: 8px;
   background: #2a2a4e;
   color: white;
 }
 
-#room-input:focus {
+#club-input:focus {
   outline: none;
   border-color: #16a34a;
 }
@@ -159,14 +157,154 @@ html, body {
   font-size: 1.25rem;
 }
 
-.room-info {
+.club-info {
   font-size: 0.875rem;
   opacity: 0.7;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.room-info span {
+.club-info span {
   font-weight: 700;
-  letter-spacing: 0.1em;
+}
+
+.settings-toggle-btn {
+  background: none;
+  border: none;
+  color: white;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.settings-toggle-btn:hover,
+.settings-toggle-btn.active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Settings Panel */
+.settings-panel {
+  background: #2a2a4e;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.settings-panel h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  opacity: 0.8;
+}
+
+.setting-group {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.setting-group:last-child {
+  border-bottom: none;
+}
+
+.setting-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.setting-label span:first-child {
+  font-size: 0.95rem;
+}
+
+.setting-label input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-switch {
+  width: 50px;
+  height: 28px;
+  background: #444;
+  border-radius: 14px;
+  position: relative;
+  transition: background 0.3s ease;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: white;
+  border-radius: 50%;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.3s ease;
+}
+
+.setting-label input[type="checkbox"]:checked + .toggle-switch {
+  background: #16a34a;
+}
+
+.setting-label input[type="checkbox"]:checked + .toggle-switch::after {
+  transform: translateX(22px);
+}
+
+.setting-label-text {
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.radio-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #1a1a2e;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.radio-option:hover {
+  background: #333366;
+}
+
+.radio-option input[type="radio"] {
+  display: none;
+}
+
+.radio-option input[type="radio"]:checked ~ span {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.radio-option input[type="radio"]:checked ~ span::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #16a34a;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+
+.setting-hint {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  margin-top: 0.5rem;
 }
 
 /* Status bar */

@@ -13,29 +13,31 @@ import {
   DocumentReference,
 } from 'firebase/firestore';
 import { getDb } from './firebase.ts';
-import { Room, RoomState, Command, CommandWithId, INITIAL_ROOM_STATE } from './types.ts';
+import {
+  Club,
+  ClubState,
+  ClubConfig,
+  Command,
+  CommandWithId,
+  INITIAL_CLUB_STATE,
+  DEFAULT_CONFIG,
+} from './types.ts';
 
-// Create a new room
-export async function createRoom(roomId: string, title: string = 'Toastmasters Timer'): Promise<void> {
-  console.log('[Firestore] createRoom called with roomId:', roomId);
+// Create a new club or load existing
+export async function createClub(clubId: string): Promise<void> {
+  console.log('[Firestore] createClub called with clubId:', clubId);
   const db = getDb();
-  console.log('[Firestore] Got db instance');
-  const roomRef = doc(db, 'rooms', roomId);
-  console.log('[Firestore] Created room reference');
+  const clubRef = doc(db, 'clubs', clubId);
 
-  const room: Room = {
-    createdAt: Date.now(),
-    title,
-    state: INITIAL_ROOM_STATE,
-    controller: {
-      lastSeenAt: null,
-      clientId: null,
-    },
+  const club: Club = {
+    config: DEFAULT_CONFIG,
+    state: INITIAL_CLUB_STATE,
+    updatedAt: Date.now(),
   };
 
-  console.log('[Firestore] Attempting setDoc with room data:', JSON.stringify(room, null, 2));
+  console.log('[Firestore] Attempting setDoc with club data:', JSON.stringify(club, null, 2));
   try {
-    await setDoc(roomRef, room);
+    await setDoc(clubRef, club);
     console.log('[Firestore] setDoc completed successfully');
   } catch (error) {
     console.error('[Firestore] setDoc FAILED:', error);
@@ -43,89 +45,93 @@ export async function createRoom(roomId: string, title: string = 'Toastmasters T
   }
 }
 
-// Get a room by ID
-export async function getRoom(roomId: string): Promise<Room | null> {
+// Get a club by ID
+export async function getClub(clubId: string): Promise<Club | null> {
   const db = getDb();
-  const roomRef = doc(db, 'rooms', roomId);
-  const snapshot = await getDoc(roomRef);
+  const clubRef = doc(db, 'clubs', clubId);
+  const snapshot = await getDoc(clubRef);
 
   if (!snapshot.exists()) {
     return null;
   }
 
-  return snapshot.data() as Room;
+  return snapshot.data() as Club;
 }
 
-// Check if a room exists
-export async function roomExists(roomId: string): Promise<boolean> {
-  const room = await getRoom(roomId);
-  return room !== null;
+// Check if a club exists
+export async function clubExists(clubId: string): Promise<boolean> {
+  const club = await getClub(clubId);
+  return club !== null;
 }
 
-// Subscribe to room changes
-export function subscribeToRoom(
-  roomId: string,
-  onUpdate: (room: Room | null) => void,
+// Subscribe to club changes
+export function subscribeToClub(
+  clubId: string,
+  onUpdate: (club: Club | null) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
-  console.log('[Firestore] subscribeToRoom called for roomId:', roomId);
+  console.log('[Firestore] subscribeToClub called for clubId:', clubId);
   const db = getDb();
-  const roomRef = doc(db, 'rooms', roomId);
+  const clubRef = doc(db, 'clubs', clubId);
 
   return onSnapshot(
-    roomRef,
+    clubRef,
     (snapshot) => {
-      console.log('[Firestore] Room snapshot received, exists:', snapshot.exists());
+      console.log('[Firestore] Club snapshot received, exists:', snapshot.exists());
       if (snapshot.exists()) {
-        console.log('[Firestore] Room data:', JSON.stringify(snapshot.data(), null, 2));
-        onUpdate(snapshot.data() as Room);
+        console.log('[Firestore] Club data:', JSON.stringify(snapshot.data(), null, 2));
+        onUpdate(snapshot.data() as Club);
       } else {
-        console.log('[Firestore] Room does not exist');
+        console.log('[Firestore] Club does not exist');
         onUpdate(null);
       }
     },
     (error) => {
-      console.error('[Firestore] Room subscription error:', error);
+      console.error('[Firestore] Club subscription error:', error);
       onError?.(error);
     }
   );
 }
 
-// Update room state
-export async function updateRoomState(roomId: string, state: Partial<RoomState>): Promise<void> {
+// Update club state
+export async function updateClubState(clubId: string, state: Partial<ClubState>): Promise<void> {
   const db = getDb();
-  const roomRef = doc(db, 'rooms', roomId);
+  const clubRef = doc(db, 'clubs', clubId);
 
   // Build update object with dot notation for nested fields
-  const updates: Record<string, unknown> = {};
+  const updates: Record<string, unknown> = {
+    updatedAt: Date.now(),
+  };
   for (const [key, value] of Object.entries(state)) {
     updates[`state.${key}`] = value;
   }
 
-  await updateDoc(roomRef, updates);
+  await updateDoc(clubRef, updates);
 }
 
-// Update controller info
-export async function updateControllerInfo(
-  roomId: string,
-  clientId: string
-): Promise<void> {
+// Update club config
+export async function updateClubConfig(clubId: string, config: Partial<ClubConfig>): Promise<void> {
   const db = getDb();
-  const roomRef = doc(db, 'rooms', roomId);
+  const clubRef = doc(db, 'clubs', clubId);
 
-  await updateDoc(roomRef, {
-    'controller.lastSeenAt': Date.now(),
-    'controller.clientId': clientId,
-  });
+  // Build update object with dot notation for nested fields
+  const updates: Record<string, unknown> = {
+    updatedAt: Date.now(),
+  };
+  for (const [key, value] of Object.entries(config)) {
+    updates[`config.${key}`] = value;
+  }
+
+  await updateDoc(clubRef, updates);
 }
 
-// Send a command to the room
+// Send a command to the club
 export async function sendCommand(
-  roomId: string,
+  clubId: string,
   command: Omit<Command, 'sentAtMs'>
 ): Promise<DocumentReference> {
   const db = getDb();
-  const commandsRef = collection(db, 'rooms', roomId, 'commands');
+  const commandsRef = collection(db, 'clubs', clubId, 'commands');
 
   const fullCommand: Command = {
     ...command,
@@ -137,12 +143,12 @@ export async function sendCommand(
 
 // Subscribe to commands (for display/tablet)
 export function subscribeToCommands(
-  roomId: string,
+  clubId: string,
   onCommand: (commands: CommandWithId[]) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
   const db = getDb();
-  const commandsRef = collection(db, 'rooms', roomId, 'commands');
+  const commandsRef = collection(db, 'clubs', clubId, 'commands');
   const q = query(commandsRef, orderBy('sentAtMs', 'asc'));
 
   return onSnapshot(
@@ -165,8 +171,8 @@ export function subscribeToCommands(
 }
 
 // Delete a processed command
-export async function deleteCommand(roomId: string, commandId: string): Promise<void> {
+export async function deleteCommand(clubId: string, commandId: string): Promise<void> {
   const db = getDb();
-  const commandRef = doc(db, 'rooms', roomId, 'commands', commandId);
+  const commandRef = doc(db, 'clubs', clubId, 'commands', commandId);
   await deleteDoc(commandRef);
 }
