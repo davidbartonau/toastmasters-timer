@@ -82,9 +82,9 @@ async function createNewRoom(id: string) {
   }
 }
 
-async function joinRoom(id: string) {
+async function joinRoom(_id: string) {
   setConnectionStatus('connecting', 'Joining room...');
-  // Room already exists, we'll subscribe to it
+  // Room already exists, we'll subscribe to it via startSubscriptions
 }
 
 function startSubscriptions() {
