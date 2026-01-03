@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Toastmasters Timer - Control</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app" class="control-container">
+      <!-- QR Scanner View -->
+      <div id="scanner-view" class="scanner-view">
+        <div class="scanner-header">
+          <h1>Toastmasters Timer</h1>
+          <p>Scan the QR code on the display</p>
+        </div>
+        <div class="scanner-area">
+          <video id="scanner-video" autoplay playsinline></video>
+          <div class="scanner-overlay">
+            <div class="scanner-frame"></div>
+          </div>
+        </div>
+        <div class="scanner-footer">
+          <p>Or enter room code:</p>
+          <div class="manual-entry">
+            <input
+              type="text"
+              id="room-input"
+              placeholder="ABC123"
+              maxlength="6"
+              autocomplete="off"
+              autocapitalize="characters"
+            />
+            <button id="join-btn">Join</button>
+          </div>
+        </div>
+        <div id="scanner-error" class="scanner-error hidden"></div>
+      </div>
+
+      <!-- Controller View -->
+      <div id="controller-view" class="controller-view hidden">
+        <header class="controller-header">
+          <h1>Timer Control</h1>
+          <div class="room-info">
+            Room: <span id="room-code"></span>
+          </div>
+        </header>
+
+        <!-- Status display -->
+        <div class="status-bar">
+          <div class="status-indicator" id="status-indicator">
+            <span class="status-dot"></span>
+            <span class="status-text" id="status-text">Connecting...</span>
+          </div>
+          <div class="current-time" id="current-time">--:--</div>
+        </div>
+
+        <!-- Presets -->
+        <section class="presets-section">
+          <h2>Select Duration</h2>
+          <div class="presets-grid" id="presets-grid">
+            <!-- Preset buttons will be generated here -->
+          </div>
+        </section>
+
+        <!-- Controls -->
+        <section class="controls-section">
+          <div class="controls-grid">
+            <button id="start-btn" class="control-btn start-btn" disabled>
+              Start
+            </button>
+            <button id="stop-btn" class="control-btn stop-btn" disabled>
+              Stop
+            </button>
+            <button id="reset-btn" class="control-btn reset-btn">
+              Reset
+            </button>
+          </div>
+        </section>
+
+        <!-- Connection status -->
+        <footer class="controller-footer">
+          <div class="connection-indicator" id="connection-indicator">
+            <span class="conn-dot"></span>
+            <span id="connection-text">Connected</span>
+          </div>
+        </footer>
+      </div>
+
+      <!-- Error overlay -->
+      <div id="error-overlay" class="error-overlay hidden">
+        <div class="error-content">
+          <h3>Error</h3>
+          <p id="error-message"></p>
+          <button id="error-close">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
