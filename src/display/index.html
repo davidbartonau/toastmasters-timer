@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Toastmasters Timer - Display</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app" class="display-container color-neutral">
+      <!-- Audio unlock overlay -->
+      <div id="audio-unlock" class="audio-unlock">
+        <div class="audio-unlock-content">
+          <h2>Tap to Enable Audio</h2>
+          <p>Audio is required for overtime alerts</p>
+          <button id="unlock-btn" class="unlock-btn">Enable Audio</button>
+        </div>
+      </div>
+
+      <!-- Main timer display -->
+      <div id="timer-display" class="timer-display">
+        <div class="timer-time" id="timer-time">00:00</div>
+        <div class="timer-status" id="timer-status">Ready</div>
+        <div class="timer-overtime" id="timer-overtime"></div>
+      </div>
+
+      <!-- QR code section (shown when room is created) -->
+      <div id="qr-section" class="qr-section">
+        <div class="qr-container">
+          <canvas id="qr-canvas"></canvas>
+          <div class="room-id" id="room-id"></div>
+          <div class="qr-instruction">Scan to control</div>
+        </div>
+      </div>
+
+      <!-- Connection status -->
+      <div id="connection-status" class="connection-status">
+        <span class="status-dot"></span>
+        <span class="status-text">Connecting...</span>
+      </div>
+
+      <!-- Error display -->
+      <div id="error-display" class="error-display hidden">
+        <div class="error-content">
+          <h3>Error</h3>
+          <p id="error-message"></p>
+          <button id="error-dismiss">Dismiss</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
