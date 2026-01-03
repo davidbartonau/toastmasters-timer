@@ -16,7 +16,13 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "firebase/firestore": ["./node_modules/@firebase/firestore/dist/index.d.ts"],
+      "firebase/app": ["./node_modules/@firebase/app/dist/esm/index.esm.d.ts"]
+    }
   },
   "include": ["src"]
 }
